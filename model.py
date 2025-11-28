@@ -2,11 +2,22 @@ import spacy
 import re
 import hashlib
 
-# Load Model
-try:
-    nlp = spacy.load("en_core_web_lg")
-except:
-    nlp = spacy.load("en_core_web_sm")
+# --- 🟢 UPDATED: Safe Model Loading Logic ---
+def load_nlp():
+    """
+    Attempts to load the efficient English model.
+    Falls back to a blank model to prevent App Crash in Cloud.
+    """
+    try:
+        # Cloud/Hackathon এর জন্য 'sm' (Small) মডেল বেস্ট
+        return spacy.load("en_core_web_sm")
+    except Exception as e:
+        print(f"⚠️ Model load failed: {e}. Using Blank Fallback.")
+        # Fallback → blank English model (no crash, basic tokenization)
+        return spacy.blank("en")
+
+# Initialize NLP
+nlp = load_nlp()
 
 def get_masked_text(text, label, style="Tags"):
     """Returns text masked in the chosen style."""
@@ -26,7 +37,7 @@ def redact_text(text, selected_entities, masking_style="Tags"):
     redacted_text = text
     detected_items = []
 
-    # --- 1. Regex Patterns (Universal) ---
+    # --- 1. Regex Patterns (Robust & Fast) ---
     patterns = {
         "EMAIL": r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
         "PHONE": r'\b(?:\+?(\d{1,3}))?[-. (]*(\d{3})[-. )]*(\d{3})[-. ]*(\d{4})\b',
@@ -45,23 +56,25 @@ def redact_text(text, selected_entities, masking_style="Tags"):
                 detected_items.append((original_chunk, label))
 
     # --- 2. AI Detection (Contextual) ---
-    doc = nlp(redacted_text) # Re-process partially redacted text
-    
-    # Collect Replacements
-    ai_replacements = []
-    for ent in doc.ents:
-        if ent.label_ in selected_entities:
-            # Avoid re-masking already masked items (simple check)
-            if masking_style == "Tags" and ent.text.startswith("["): continue
-            if masking_style == "Blackout" and "█" in ent.text: continue
-            
-            ai_replacements.append((ent.text, ent.label_))
-            detected_items.append((ent.text, ent.label_))
-    
-    # Apply Replacements
-    for item, label in ai_replacements:
-        mask = get_masked_text(item, label, masking_style)
-        redacted_text = redacted_text.replace(item, mask)
+    # Re-process text to find context-based entities (Name, Org, Location)
+    # Only runs if model loaded successfully (blank model won't find ents)
+    if "ner" in nlp.pipe_names: 
+        doc = nlp(redacted_text) 
+        
+        ai_replacements = []
+        for ent in doc.ents:
+            if ent.label_ in selected_entities:
+                # Avoid re-masking already masked items
+                if masking_style == "Tags" and ent.text.startswith("["): continue
+                if masking_style == "Blackout" and "█" in ent.text: continue
+                
+                ai_replacements.append((ent.text, ent.label_))
+                detected_items.append((ent.text, ent.label_))
+        
+        # Apply Replacements
+        for item, label in ai_replacements:
+            mask = get_masked_text(item, label, masking_style)
+            redacted_text = redacted_text.replace(item, mask)
     
     return redacted_text, detected_items
 
@@ -69,6 +82,5 @@ def calculate_safety_score(original, redacted):
     if not original: return 100
     if original == redacted: return 0
     diff_ratio = 1 - (len(redacted) / len(original))
-    # Adjusted logic for variable lengths (hashing/tags)
     return 98 if diff_ratio != 0 else 0
-  
+    
