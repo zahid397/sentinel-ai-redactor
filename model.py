@@ -19,11 +19,18 @@ def get_masked_text(text, label, style="Tags"):
     return f"[{label}]"
 
 def redact_text(text, selected_entities, masking_style="Tags"):
+    """
+    Hybrid Redaction: Regex (Structured) + AI (Unstructured).
+    Returns redacted text AND a detailed list of entities with indices.
+    """
     redacted_text = text
-    detected_items = [] 
+    detected_items = [] # Stores: (Entity Label, Text, Start, End)
 
-    # --- 1. Regex Patterns ---
+    # --- 1. Regex Patterns (Updated with PERSON) ---
     patterns = {
+        # ✅ NEW: Regex for Capitalized Names (e.g. John Doe)
+        "PERSON": r'\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)+)\b',
+        
         "URL": r'(https?://\S+|www\.\S+)',
         "EMAIL_ADDRESS": r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
         "PHONE_NUMBER": r'\+?\d[\d\s().-]{7,}\d',
@@ -32,11 +39,16 @@ def redact_text(text, selected_entities, masking_style="Tags"):
         "DATE_TIME": r'\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4}|\d{2}:\d{2}'
     }
 
+    # Apply Regex First
     for label, pattern in patterns.items():
         if label in selected_entities:
-            # We iterate carefully to avoid index mess-up (simplified for hackathon)
             for match in re.finditer(pattern, redacted_text):
                 original_chunk = match.group()
+                
+                # Double check to prevent overlapping masking issues
+                if "[" in original_chunk and "]" in original_chunk:
+                    continue
+
                 # Store details
                 detected_items.append({
                     "Entity": label,
@@ -44,34 +56,45 @@ def redact_text(text, selected_entities, masking_style="Tags"):
                     "Start": match.start(),
                     "End": match.end()
                 })
-                # Note: In a real prod env, we'd handle offsets more carefully
+                # Replace
                 mask = get_masked_text(original_chunk, label, masking_style)
-                # Replacing only the first occurrence to be safe in loop
+                # Replacing one by one to keep text flow mostly intact for next regex
                 redacted_text = redacted_text.replace(original_chunk, mask, 1)
 
-    # --- 2. AI Detection ---
+    # --- 2. AI Detection (Contextual) ---
+    # Map spaCy labels to Hackathon requirements
     SPACY_MAPPING = {
-        "PERSON": "PERSON", "GPE": "LOCATION", "LOC": "LOCATION",
-        "ORG": "ORGANIZATION", "DATE": "DATE_TIME", "TIME": "DATE_TIME"
+        "PERSON": "PERSON",
+        "GPE": "LOCATION",
+        "LOC": "LOCATION",
+        "ORG": "ORGANIZATION",
+        "DATE": "DATE_TIME",
+        "TIME": "DATE_TIME"
     }
 
     if "ner" in nlp.pipe_names:
-        doc = nlp(redacted_text)
+        doc = nlp(redacted_text) # Process the partially redacted text
+        
         ai_replacements = []
         for ent in doc.ents:
             hackathon_label = SPACY_MAPPING.get(ent.label_, ent.label_)
+            
             if hackathon_label in selected_entities:
+                # Skip if already masked
                 if masking_style == "Tags" and ent.text.startswith("["): continue
                 if masking_style == "Blackout" and "█" in ent.text: continue
+                
                 ai_replacements.append((ent.text, hackathon_label, ent.start_char, ent.end_char))
         
+        # Apply AI Replacements
         for text_chunk, label, start, end in ai_replacements:
             mask = get_masked_text(text_chunk, label, masking_style)
             redacted_text = redacted_text.replace(text_chunk, mask, 1)
+            
             detected_items.append({
                 "Entity": label,
                 "Text": text_chunk,
-                "Start": start, # Approximate for AI
+                "Start": start, # Approximate due to previous edits
                 "End": end
             })
     
