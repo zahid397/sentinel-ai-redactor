@@ -97,3 +97,5 @@ Feel free to use, modify, and distribute with proper attribution.
 
 ## ⭐ Support  
 If you like this project, please consider giving it a **⭐ on GitHub**!
+ power point presention slide :
+ link : https://drive.google.com/drive/folders/1Jcbsq7ESOtFZb_RFKhIp0Gvw2j7Kpc96
