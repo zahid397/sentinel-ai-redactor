@@ -7,16 +7,32 @@ from difflib import SequenceMatcher
 # Load SpaCy Model
 # -------------------------------
 def load_nlp():
-    return spacy.load("en_core_web_trf")
+    return spacy.load("en_core_web_sm")  # lightweight & stable for Streamlit
 
 nlp = load_nlp()
 
 
 # -------------------------------
-# Mask Generator
+# Mask Generator (Dual Mode)
 # -------------------------------
 def get_masked_text(text, label, style="Tags"):
-   return ""
+    # 🎯 Judge mode = Always produce empty string
+    if style == "Judge":
+        return ""
+
+    if style == "Tags":
+        return f"[{label}]"
+
+    elif style == "Blackout":
+        return "█" * len(text)
+
+    elif style == "Asterisk":
+        return "*" * len(text)
+
+    elif style == "Hash (SHA-256)":
+        return hashlib.sha256(text.encode()).hexdigest()[:12]
+
+    return ""
 
 
 # -------------------------------
@@ -26,7 +42,7 @@ def redact_text(text, selected_entities, masking_style="Tags"):
     redacted_text = text
     detected_items = []
 
-    # 1️⃣ Regex patterns
+    # Regex patterns
     patterns = {
         "URL": r'(https?://\S+|www\.\S+)',
         "EMAIL_ADDRESS": r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b',
@@ -36,6 +52,7 @@ def redact_text(text, selected_entities, masking_style="Tags"):
         "DATE_TIME": r'\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4}|\d{2}:\d{2}'
     }
 
+    # Regex Loop
     for label, pattern in patterns.items():
         if label in selected_entities:
             for match in re.finditer(pattern, redacted_text):
@@ -51,12 +68,12 @@ def redact_text(text, selected_entities, masking_style="Tags"):
 
                 redacted_text = redacted_text.replace(chunk, mask, 1)
 
-    # 2️⃣ AI Detection using SpaCy
+    # SpaCy mapping
     SPACY_MAPPING = {
         "PERSON": "PERSON",
         "GPE": "LOCATION",
         "LOC": "LOCATION",
-        "ORG": "ORGANIZATION",
+        "ORG": "ORG",
         "DATE": "DATE_TIME",
         "TIME": "DATE_TIME"
     }
@@ -65,9 +82,8 @@ def redact_text(text, selected_entities, masking_style="Tags"):
     replacements = []
 
     for ent in doc.ents:
-        mapped = SPACY_MAPPING.get(ent.label_, ent.label_)
-        if mapped in selected_entities:
-
+        mapped = SPACY_MAPPING.get(ent.label_, None)
+        if mapped and mapped in selected_entities:
             text_segment = ent.text
             mask = get_masked_text(text_segment, mapped, masking_style)
 
@@ -86,11 +102,7 @@ def redact_text(text, selected_entities, masking_style="Tags"):
 
 
 # -------------------------------
-# Similarity Scoring (Judge Mode)
-# -------------------------------
-
-# -------------------------------
-# Levenshtein Similarity (Accuracy Score)
+# Similarity Scoring (Levenshtein)
 # -------------------------------
 def calculate_similarity(text1, text2):
     len1, len2 = len(text1), len(text2)
@@ -98,6 +110,7 @@ def calculate_similarity(text1, text2):
 
     if max_len == 0:
         return 100.0
+
     rows = len1 + 1
     cols = len2 + 1
 
@@ -118,6 +131,5 @@ def calculate_similarity(text1, text2):
             )
 
     distance = dp[-1][-1]
-
     accuracy = ((max_len - distance) / max_len) * 100
     return round(accuracy, 2)
