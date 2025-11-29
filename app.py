@@ -1,4 +1,4 @@
-limport streamlit as st
+import streamlit as st
 import pandas as pd
 from model import redact_text, calculate_similarity
 from collections import Counter
@@ -162,3 +162,4 @@ with tab2:
                 st.error("CSV must contain 'original_text' and 'ground_truth' columns.")
         except Exception as e:
             st.error(f"Error reading CSV: {e}")
+            
