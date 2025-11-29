@@ -1,13 +1,15 @@
 import spacy
 import re
 import hashlib
-from difflib import SequenceMatcher
 
 # -------------------------------
-# Load SpaCy Model
+# Safe SpaCy Load
 # -------------------------------
 def load_nlp():
-    return spacy.load("en_core_web_trf")
+    try:
+        return spacy.load("en_core_web_sm")
+    except:
+        return spacy.blank("en")
 
 nlp = load_nlp()
 
@@ -16,17 +18,25 @@ nlp = load_nlp()
 # Mask Generator
 # -------------------------------
 def get_masked_text(text, label, style="Tags"):
-   return ""
+    if style == "Tags":
+        return f"[{label}]"
+    elif style == "Blackout":
+        return "█" * len(text)
+    elif style == "Asterisks":
+        return "*" * len(text)
+    elif style == "Hash (SHA-256)":
+        return hashlib.sha256(text.encode()).hexdigest()[:10]
+    return f"[{label}]"
 
 
 # -------------------------------
-# PII Redaction System
+# PII Redaction
 # -------------------------------
 def redact_text(text, selected_entities, masking_style="Tags"):
     redacted_text = text
     detected_items = []
 
-    # 1️⃣ Regex patterns
+    # Regex entities
     patterns = {
         "URL": r'(https?://\S+|www\.\S+)',
         "EMAIL_ADDRESS": r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b',
@@ -42,16 +52,10 @@ def redact_text(text, selected_entities, masking_style="Tags"):
                 chunk = match.group()
                 mask = get_masked_text(chunk, label, masking_style)
 
-                detected_items.append({
-                    "Entity": label,
-                    "Text": chunk,
-                    "Start": match.start(),
-                    "End": match.end()
-                })
-
+                detected_items.append({"Entity": label, "Text": chunk})
                 redacted_text = redacted_text.replace(chunk, mask, 1)
 
-    # 2️⃣ AI Detection using SpaCy
+    # AI detection
     SPACY_MAPPING = {
         "PERSON": "PERSON",
         "GPE": "LOCATION",
@@ -62,62 +66,21 @@ def redact_text(text, selected_entities, masking_style="Tags"):
     }
 
     doc = nlp(redacted_text)
-    replacements = []
 
     for ent in doc.ents:
         mapped = SPACY_MAPPING.get(ent.label_, ent.label_)
         if mapped in selected_entities:
-
-            text_segment = ent.text
-            mask = get_masked_text(text_segment, mapped, masking_style)
-
-            replacements.append((text_segment, mask, mapped, ent.start_char, ent.end_char))
-
-    for original, mask, label, start, end in replacements:
-        redacted_text = redacted_text.replace(original, mask, 1)
-        detected_items.append({
-            "Entity": label,
-            "Text": original,
-            "Start": start,
-            "End": end
-        })
+            mask = get_masked_text(ent.text, mapped, masking_style)
+            detected_items.append({"Entity": mapped, "Text": ent.text})
+            redacted_text = redacted_text.replace(ent.text, mask, 1)
 
     return redacted_text, detected_items
 
 
 # -------------------------------
-# Similarity Scoring (Judge Mode)
+# Similarity
 # -------------------------------
+from difflib import SequenceMatcher
 
-# -------------------------------
-# Levenshtein Similarity (Accuracy Score)
-# -------------------------------
-def calculate_similarity(text1, text2):
-    len1, len2 = len(text1), len(text2)
-    max_len = max(len1, len2)
-
-    if max_len == 0:
-        return 100.0
-    rows = len1 + 1
-    cols = len2 + 1
-
-    dp = [[0] * cols for _ in range(rows)]
-
-    for i in range(rows):
-        dp[i][0] = i
-    for j in range(cols):
-        dp[0][j] = j
-
-    for i in range(1, rows):
-        for j in range(1, cols):
-            cost = 0 if text1[i-1] == text2[j-1] else 1
-            dp[i][j] = min(
-                dp[i-1][j] + 1,
-                dp[i][j-1] + 1,
-                dp[i-1][j-1] + cost
-            )
-
-    distance = dp[-1][-1]
-
-    accuracy = ((max_len - distance) / max_len) * 100
-    return round(accuracy, 2)
+def calculate_similarity(a, b):
+    return round(SequenceMatcher(None, a, b).ratio() * 100, 2)
