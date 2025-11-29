@@ -23,11 +23,18 @@ def get_masked_text(text, label, style="Tags"):
 # PII Redaction System
 # -------------------------------
 def redact_text(text, selected_entities, masking_style="Tags"):
+    """
+    Hybrid Redaction: Regex (Structured) + AI (Unstructured).
+    Returns redacted text AND a detailed list of entities with indices.
+    """
     redacted_text = text
     detected_items = []
 
     # 1️⃣ Regex patterns
     patterns = {
+        # ✅ NEW: Regex for Capitalized Names (e.g. John Doe)
+        "PERSON": r'\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)+)\b',
+        
         "URL": r'(https?://\S+|www\.\S+)',
         "EMAIL_ADDRESS": r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b',
         "PHONE_NUMBER": r'\+?\d[\d\s().-]{7,}\d',
@@ -36,6 +43,7 @@ def redact_text(text, selected_entities, masking_style="Tags"):
         "DATE_TIME": r'\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4}|\d{2}:\d{2}'
     }
 
+    # Apply Regex First
     for label, pattern in patterns.items():
         if label in selected_entities:
             for match in re.finditer(pattern, redacted_text):
@@ -53,6 +61,12 @@ def redact_text(text, selected_entities, masking_style="Tags"):
 
     # 2️⃣ AI Detection using SpaCy
     SPACY_MAPPING = {
+        "PERSON": "PERSON",
+        "GPE": "LOCATION",
+        "LOC": "LOCATION",
+        "ORG": "ORGANIZATION",
+        "DATE": "DATE_TIME",
+        "TIME": "DATE_TIME"
         "PERSON": "PERSON",
         "GPE": "LOCATION",
         "LOC": "LOCATION",
