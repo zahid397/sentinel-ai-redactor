@@ -1,4 +1,4 @@
-import streamlit as st
+limport streamlit as st
 import pandas as pd
 from model import redact_text, calculate_similarity
 from collections import Counter
@@ -7,9 +7,8 @@ from PyPDF2 import PdfReader
 from fpdf import FPDF
 
 # --- Theme Config ---
-st.set_page_config(page_title="🛡️ Sentinel AI - Final", layout="wide", page_icon="🔒")
+st.set_page_config(page_title="🛡️ Sentinel AI - PU_Hackers", layout="wide", page_icon="🔒")
 
-# --- Custom CSS ---
 st.markdown("""
     <style>
     .main { background-color: #0E1117; color: white; }
@@ -23,7 +22,7 @@ st.markdown("""
 # --- Header ---
 col1, col2 = st.columns([3, 1])
 with col1:
-    st.title("🛡️ Sentinel AI: Hackathon Edition")
+    st.title("🛡️ Sentinel AI By PU_Hackers")
     st.markdown("**Enterprise PII Redaction System** | *ISO/GDPR Compliant*")
 with col2:
     st.success("✅ SYSTEM STATUS: LIVE")
@@ -54,6 +53,12 @@ with tab1:
     st.subheader("📥 Input Data Stream")
     input_text = st.text_area("Raw Text:", height=150, placeholder="Paste content with Names, IPs, Dates, URLs...")
 
+    ground_truth_text = st.text_area(
+        "📑 Ground Truth (Optional, for Accuracy Check):", 
+        height=150, 
+        placeholder="Paste expected redacted text here to see similarity score..."
+    )
+
     if st.button("🛡️ EXECUTE REDACTION", type="primary"):
         if input_text:
             with st.spinner("⚡ Processing Engines..."):
@@ -69,6 +74,13 @@ with tab1:
                 with c2:
                     st.markdown(f"**✅ Redacted ({masking_style})**")
                     st.code(redacted, language='text')
+                    
+                    # --- Accuracy Section ---
+                    if ground_truth_text.strip():
+                        sim_score = calculate_similarity(redacted, ground_truth_text)
+                        st.markdown(f"**📊 Similarity with Ground Truth:** {sim_score:.2f}%")
+                        status = "✅ Good Match" if sim_score > 95 else "⚠️ Review Needed"
+                        st.markdown(f"**Status:** {status}")
                 
                 # --- Entity Table (Hackathon PDF Standard) ---
                 st.divider()
@@ -78,7 +90,7 @@ with tab1:
                     # Create DataFrame
                     df = pd.DataFrame(details)
                     
-                    # 🎯 JUDGE KILLER FIX: Rename columns to match PDF specs exactly
+                    # Rename columns
                     df = df.rename(columns={
                         "Entity": "Entity Name",
                         "Text": "Extracted Text",
@@ -86,7 +98,7 @@ with tab1:
                         "End": "End Index"
                     })
                     
-                    # Display professional table
+                    # Display table
                     st.dataframe(df, use_container_width=True)
                     
                     # Stats Chart
@@ -150,4 +162,3 @@ with tab2:
                 st.error("CSV must contain 'original_text' and 'ground_truth' columns.")
         except Exception as e:
             st.error(f"Error reading CSV: {e}")
-            
