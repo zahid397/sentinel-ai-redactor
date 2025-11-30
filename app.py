@@ -4,13 +4,11 @@ import time
 import re
 
 # --- 1. IMPORT MODEL ---
-# আপনার model.py ফাইলটি প্রজেক্ট ফোল্ডারে থাকতে হবে
 try:
     from model import redact_text
 except ImportError:
-    # যদি model.py না পায়, তবে ডেমো হিসেবে এই ফাংশন চলবে (যাতে এরর না দেয়)
+    # Demo logic if model.py is missing
     def redact_text(text, entities, style):
-        # Demo logic just for testing if file is missing
         redacted = text
         details = []
         if "Zahid" in text:
@@ -19,7 +17,7 @@ except ImportError:
             details.append({"Entity": "PERSON", "Text": "Zahid", "Start": 0, "End": 5})
         return redacted, details
 
-# --- 2. LEVENSHTEIN ALGORITHM (Standard Logic) ---
+# --- 2. LEVENSHTEIN ALGORITHM ---
 def levenshtein_distance(s1, s2):
     if len(s1) < len(s2):
         return levenshtein_distance(s2, s1)
@@ -36,9 +34,8 @@ def levenshtein_distance(s1, s2):
         previous_row = current_row
     return previous_row[-1]
 
-# --- 3. SMART SCORING (With Normalization) ---
+# --- 3. SMART SCORING ---
 def calculate_similarity_score(text1, text2):
-    # সব স্পেস এবং নিউ লাইন মুছে ফেলছি তুলনা করার জন্য
     t1_clean = "".join(str(text1).split()).lower()
     t2_clean = "".join(str(text2).split()).lower()
     
@@ -63,10 +60,10 @@ st.markdown("""
 # Header
 col1, col2 = st.columns([3, 1])
 with col1:
-    st.title("🛡️ Sentinel AI")
+    st.title("🛡️ Sentinel AI: Hackathon Edition")
     st.caption("Enterprise Redaction System with Levenshtein Validation")
 with col2:
-    st.success("✅ SYSTEM LIVE")
+    st.success("✅ SYSTEM STATUS: LIVE")
 
 # Sidebar
 with st.sidebar:
@@ -74,74 +71,91 @@ with st.sidebar:
     masking_style = st.selectbox("Redaction Style", ["Tags", "Blackout", "Hash (SHA-256)"])
     
     st.markdown("### Targets")
-    targets = {"PERSON": True, "EMAIL_ADDRESS": True, "PHONE_NUMBER": True, "URL": True}
+    targets = {
+        "PERSON": True, "EMAIL_ADDRESS": True, "PHONE_NUMBER": True, 
+        "URL": True, "IP_ADDRESS": True, "DATE_TIME": True, "LOCATION": True
+    }
     selected_entities = [k for k, v in targets.items() if st.checkbox(k, value=v)]
 
 # Tabs
-tab1, tab2 = st.tabs(["🚀 Live Redaction", "⚖️ Bulk Evaluation"])
+tab1, tab2 = st.tabs(["🚀 Live Redaction Studio", "⚖️ Bulk Evaluation"])
 
 # ================= TAB 1: LIVE STUDIO =================
 with tab1:
     st.subheader("📥 Input Data Stream")
     
-    # ইনপুট
-    input_text = st.text_area("Raw Text:", height=100, placeholder="Example: Hello Zahid")
+    input_text = st.text_area("Raw Text:", height=120, placeholder="Paste your content here...")
     
-    # Ground Truth (Debug এর জন্য খুবই জরুরি)
     input_ground_truth = st.text_area(
-        "📑 Ground Truth (Expected):", 
+        "📑 Ground Truth (For 100% Score):", 
         height=100, 
-        placeholder="Example: Hello [PERSON] (If style is Tags)"
+        placeholder="Paste the Expected Redacted Output here..."
     )
 
-    if st.button("🛡️ RUN REDACTION", type="primary"):
+    if st.button("🛡️ EXECUTE REDACTION", type="primary"):
         if input_text.strip():
-            # মডেল রান করা
-            redacted, details = redact_text(input_text, selected_entities, masking_style)
-            
-            # রেজাল্ট দেখানো
-            c1, c2 = st.columns(2)
-            with c1:
-                st.info("Original")
-                st.text(input_text)
-            with c2:
-                st.success(f"Redacted ({masking_style})")
-                st.text(redacted) # st.code এর বদলে st.text দিলে কপি করতে সুবিধা হয়
-            
-            # --- 🔍 DEBUGGER & SCORING ---
-            if input_ground_truth.strip():
-                score = calculate_similarity_score(redacted, input_ground_truth)
+            with st.spinner("⚡ Processing Engines..."):
+                time.sleep(0.5)
+                # Call Model
+                redacted, details = redact_text(input_text, selected_entities, masking_style)
                 
+                # --- Result UI ---
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.info("❌ Original Text")
+                    st.text(input_text)
+                with c2:
+                    st.success(f"✅ Redacted Output ({masking_style})")
+                    st.text(redacted)
+                
+                # --- Levenshtein Check ---
+                if input_ground_truth.strip():
+                    score = calculate_similarity_score(redacted, input_ground_truth)
+                    
+                    st.divider()
+                    st.markdown(f"### 📏 Levenshtein Accuracy: :orange[{score:.2f}%]")
+                    
+                    if score > 99.0:
+                        st.balloons()
+                        st.success("🏆 PERFECT MATCH! Algorithm Verified.")
+                    else:
+                        st.error("⚠️ Mismatch Detected! Check spelling or brackets in Ground Truth.")
+                        with st.expander("🔍 Debug View"):
+                            d1, d2 = st.columns(2)
+                            d1.code("".join(redacted.split()).lower(), language="text")
+                            d2.code("".join(input_ground_truth.split()).lower(), language="text")
+
+                # --- 📊 ENTITY TABLE & CHART (Added Back) ---
                 st.divider()
-                st.markdown(f"### 📏 Accuracy Score: :orange[{score:.2f}%]")
+                st.subheader("🔍 Detected Entities Analytics")
                 
-                if score == 100.0:
-                    st.balloons()
-                    st.success("🏆 PERFECT MATCH! Your logic is flawless.")
+                if details:
+                    # Create DataFrame
+                    df = pd.DataFrame(details)
+                    
+                    # Layout: Table on Left, Chart on Right
+                    tc1, tc2 = st.columns([2, 1])
+                    
+                    with tc1:
+                        st.markdown("**Detailed Report**")
+                        # Rename for better look
+                        rename_map = {"Entity": "Entity Type", "Text": "Detected Content", "Start": "Start", "End": "End"}
+                        df_show = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+                        st.dataframe(df_show, use_container_width=True)
+                    
+                    with tc2:
+                        st.markdown("**Entity Distribution**")
+                        if "Entity" in df.columns:
+                            st.bar_chart(df['Entity'].value_counts())
+                        elif "Entity Type" in df_show.columns:
+                            st.bar_chart(df_show['Entity Type'].value_counts())
                 else:
-                    # ১০০% না হলে লাল বক্স দেখাবে
-                    st.error("⚠️ Mismatch Detected! See below to fix it:")
-                    
-                    # পাশাপাশি তুলনা (Comparison View)
-                    d1, d2 = st.columns(2)
-                    
-                    # আমরা স্পেস মুছে ক্লিন করে দেখাবো কম্পিউটার কী দেখছে
-                    clean_model = "".join(redacted.split()).lower()
-                    clean_truth = "".join(input_ground_truth.split()).lower()
-                    
-                    with d1:
-                        st.markdown("**Computer sees (Model Output):**")
-                        st.code(clean_model, language="text")
-                    with d2:
-                        st.markdown("**Computer sees (Your Input):**")
-                        st.code(clean_truth, language="text")
-                        
-                    st.warning("💡 Tip: উপরের দুটি বক্সের লেখা হুবহু এক হতে হবে। ব্র্যাকেট `[]` বা বানানে ভুল আছে কিনা দেখুন।")
+                    st.info("No sensitive entities found to display.")
 
 # ================= TAB 2: EVALUATION =================
 with tab2:
-    st.markdown("### 📊 Bulk CSV Test")
-    uploaded_file = st.file_uploader("Upload CSV (cols: original_text, ground_truth)", type=["csv"])
+    st.markdown("### 📊 Bulk CSV Benchmark")
+    uploaded_file = st.file_uploader("Upload CSV (original_text, ground_truth)", type=["csv"])
     
     if uploaded_file:
         try:
@@ -149,14 +163,13 @@ with tab2:
             df.columns = [c.strip() for c in df.columns]
             
             if {'original_text', 'ground_truth'}.issubset(df.columns):
-                if st.button("▶️ Start Benchmark"):
+                if st.button("▶️ Run Benchmark"):
                     results = []
                     progress = st.progress(0)
                     
                     for i, row in df.iterrows():
                         p_text, _ = redact_text(str(row['original_text']), selected_entities, "Tags")
                         e_text = str(row['ground_truth'])
-                        
                         score = calculate_similarity_score(p_text, e_text)
                         
                         results.append({
@@ -168,10 +181,10 @@ with tab2:
                         progress.progress((i+1)/len(df))
                     
                     res_df = pd.DataFrame(results)
+                    st.metric("🔥 Average Accuracy", f"{res_df['Score'].mean():.2f}%")
                     st.dataframe(res_df)
-                    st.metric("Average Accuracy", f"{res_df['Score'].mean():.2f}%")
             else:
-                st.error("CSV must have 'original_text' and 'ground_truth' columns.")
+                st.error("CSV requires 'original_text' and 'ground_truth' columns.")
         except Exception as e:
             st.error(f"Error: {e}")
             
