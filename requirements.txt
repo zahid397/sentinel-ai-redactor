@@ -1,6 +1,4 @@
-streamlit
+fastapi
+uvicorn
 spacy
-pandas
-numpy
-PyPDF2
-fpdf
+pydantic
