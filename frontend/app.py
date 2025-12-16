@@ -3,10 +3,10 @@ import requests
 import pandas as pd
 import os
 
+# --- API CONFIG ---
 API_URL = os.getenv(
     "SENTINEL_API_URL",
     "https://sentinel-ai-redactor-1.onrender.com/api/v1/analyze"
-)
 )
 
 st.set_page_config(page_title="Sentinel AI Enterprise", layout="wide", page_icon="🛡️")
