@@ -1,12 +1,12 @@
 import streamlit as st
 import requests
 import pandas as pd
-import os  # ✨ Polish 1: Added for Environment Variables
+import os
 
-# --- ✨ POLISH 1: CLOUD-READY CONFIGURATION ---
-# Local এ চললে localhost পাবে, Azure/Streamlit Cloud এ environment variable থেকে নেবে।
 API_URL = os.getenv(
-    API_URL = "https://sentinel-ai-redactor-1.onrender.com/api/v1/analyze"
+    "SENTINEL_API_URL",
+    "https://sentinel-ai-redactor-1.onrender.com/api/v1/analyze"
+)
 )
 
 st.set_page_config(page_title="Sentinel AI Enterprise", layout="wide", page_icon="🛡️")
